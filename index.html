@@ -185,37 +185,60 @@
     loadDiaryList();
   }
 
-  async function loadDiaryList() {
-    const uid = getSafeUid();
-    const rootRef = collection(db, `diary/${uid}/entries`);
-    const rootSnap = await getDocs(rootRef);
+ async function loadDiaryList() {
+  const uid = getSafeUid();
+  const rootRef = collection(db, `diary/${uid}/entries`);
+  const rootSnap = await getDocs(rootRef);
 
-    let html = "";
-    for (const folder of rootSnap.docs) {
-      const dateId = folder.id;
-      const entriesSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
-      for (const docSnap of entriesSnap.docs) {
-        const data = docSnap.data();
-        const entryId = docSnap.id;
+  let html = "";
 
-        html += `
-          <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: #f9f9f9;">
-            <div class="entry-date">${dateId} · ${data.createdAt}</div>
-            <div class="entry-content">${data.content}</div>
-            ${data.image ? `<img src="${data.image}" style="max-width: 100%; margin-top: 10px;">` : ""}
-            <div style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
-              <textarea id="commentText-${entryId}" placeholder="댓글 작성" style="flex: 1; border-radius: 8px; resize: none; height: 60px;"></textarea>
-              <button onclick="insertEmoji('😊', '${entryId}')">😊</button>
-              <button onclick="insertEmoji('❤️', '${entryId}')">❤️</button>
-              <button onclick="insertEmoji('😢', '${entryId}')">😢</button>
-              <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
-            </div>
+  // 날짜 기준 내림차순 정렬 (최신일 먼저)
+  const sortedDateDocs = rootSnap.docs.sort((a, b) => b.id.localeCompare(a.id));
+
+  for (const folder of sortedDateDocs) {
+    const dateId = folder.id;
+    const entriesSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
+
+    // entryId 기준 내림차순 정렬 (최신글 먼저)
+    const sortedEntries = entriesSnap.docs.sort((a, b) => b.id.localeCompare(a.id));
+
+    for (const docSnap of sortedEntries) {
+      const data = docSnap.data();
+      const entryId = docSnap.id;
+
+      // 댓글 가져오기
+      const commentSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`));
+      let commentHtml = '';
+      commentSnap.forEach(comment => {
+        const c = comment.data();
+        commentHtml += `<div style="font-size:13px; margin-top:4px;">🗨️ ${c.text} <span style="font-size:11px; color:gray;">(${c.timestamp})</span></div>`;
+      });
+
+      html += `
+        <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: #f9f9f9;">
+          <div class="entry-date">${dateId} · ${data.createdAt}</div>
+          <div class="entry-content">${data.content}</div>
+          ${data.image ? `<img src="${data.image}" style="max-width: 100%; margin-top: 10px;">` : ""}
+          <div style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
+            <textarea id="commentText-${entryId}" placeholder="댓글 작성" style="flex: 1; border-radius: 8px; resize: none; height: 60px;"></textarea>
+            <button onclick="insertEmoji('😊', '${entryId}')">😊</button>
+            <button onclick="insertEmoji('❤️', '${entryId}')">❤️</button>
+            <button onclick="insertEmoji('😢', '${entryId}')">😢</button>
+            <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
           </div>
-        `;
-      }
+          ${commentHtml}
+        </div>
+      `;
     }
-    document.getElementById("list").innerHTML = html;
   }
+
+  document.getElementById("list").innerHTML = html;
+}
+
+
+  document.getElementById("list").innerHTML = html;
+}
+
 
   window.insertEmoji = function(emoji, entryId) {
     const textarea = document.getElementById(`commentText-${entryId}`);
