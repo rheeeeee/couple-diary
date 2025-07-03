@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>한나와 석민이의 공유일기장</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #fffaf3;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    .left, .right {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .left {
+      border-right: 1px solid #ccc;
+    }
+    .editor {
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      min-height: 150px;
+    }
+    .controls select, .controls button {
+      padding: 8px 12px;
+      margin: 5px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    #preview { max-width: 200px; margin: 10px auto; display: none; }
+    .pink-bg { background-color: #ffe6f0; }
+    .blue-bg { background-color: #e6f3ff; }
+    #commentBox { margin-top: 20px; }
+    #commentText { width: 100%; border-radius: 8px; resize: none; height: 60px; }
+  </style>
+</head>
+<body>
+<h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
+<div class="container">
+  <div class="left">
+    <div class="controls">
+      <label>작성자:</label>
+      <select id="writer" onchange="loadDiaryList(); updateEditorColor();">
+        <option value="hanna">한나</option>
+        <option value="seokmin">석민</option>
+      </select>
+      <button onclick="saveDiary()">📂 일기 저장</button>
+    </div>
+    <div id="editor" class="editor" contenteditable="true"></div>
+    <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
+    <br>
+    <img id="preview" src="">
+  </div>
+  <div class="right">
+    <h3>📚 저장된 일기 목록</h3>
+    <div id="list">불러오는 중...</div>
+    <div id="viewEntry"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBUriLDY8uRXONDUDVRLtbu1VI2iRvc-Bk",
+  authDomain: "couple-diary-1f390.firebaseapp.com",
+  projectId: "couple-diary-1f390",
+  storageBucket: "couple-diary-1f390.appspot.com",
+  messagingSenderId: "274498048639",
+  appId: "1:274498048639:web:3706b378a8281c2a47654a"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+const writerSelect = document.getElementById("writer");
+const editor = document.getElementById("editor");
+const preview = document.getElementById("preview");
+let imageFile = null;
+
+async function saveDiary() {
+  const writer = writerSelect.value;
+  const content = editor.innerHTML;
+  const now = new Date();
+  const dateId = now.toISOString().slice(0, 10);
+  const entryRef = doc(db, `diary/${writer}/entries/${dateId}`);
+
+  let imageUrl = "";
+  if (imageFile) {
+    const storageRef = ref(storage, `${writer}/${dateId}_${imageFile.name}`);
+    await uploadBytes(storageRef, imageFile);
+    imageUrl = await getDownloadURL(storageRef);
+  }
+
+  await setDoc(entryRef, {
+    content,
+    updatedAt: now.toLocaleString(),
+    image: imageUrl
+  });
+
+  alert("🌼 저장되었습니다!");
+  editor.innerHTML = "";
+  imageFile = null;
+  preview.style.display = "none";
+  insertDefaultEntryText();
+  loadDiaryList();
+}
+
+async function loadDiaryList() {
+  const writer = writerSelect.value;
+  const entriesRef = collection(db, `diary/${writer}/entries`);
+  const snap = await getDocs(entriesRef);
+
+  let html = "<ul>";
+  snap.forEach(doc => {
+    html += `<li onclick="viewDiary('${writer}', '${doc.id}')">${doc.id}</li>`;
+  });
+  html += "</ul>";
+  document.getElementById("list").innerHTML = html;
+}
+
+window.viewDiary = async function(writer, dateId) {
+  const docRef = doc(db, `diary/${writer}/entries/${dateId}`);
+  const snap = await getDoc(docRef);
+  const data = snap.data();
+  const bgColor = writer === "hanna" ? "pink-bg" : "blue-bg";
+
+  let html = `
+    <h3>📖 ${writer === "hanna" ? "한나" : "석민"}의 일기 (${dateId})</h3>
+    <div class="${bgColor}" style="padding:10px; border-radius:10px;">
+      ${data.content}
+      ${data.image ? `<br><img src="${data.image}" style="max-width:100%; margin-top:10px;">` : ""}
+    </div>
+    <div style="margin: 10px 0; display: flex; align-items: center; gap: 10px;">
+  <div id="emojiBox">
+    <button onclick="addEmoji('❤️')">❤️</button>
+    <button onclick="addEmoji('😊')">😊</button>
+    <button onclick="addEmoji('😢')">😢</button>
+  </div>
+  <button onclick="saveComment('${writer}', '${dateId}')">댓글 저장</button>
+</div>
+  `;
+
+  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/comments`);
+  const comments = await getDocs(commentRef);
+  html += `<div><h4>📆 댓글 목록</h4><ul>`;
+  comments.forEach(c => {
+    html += `<li>${c.data().text} (${c.data().timestamp})</li>`;
+  });
+  html += `</ul></div>`;
+  document.getElementById("viewEntry").innerHTML = html;
+}
+
+window.saveComment = async function(writer, dateId) {
+  const textarea = document.getElementById("commentText");
+  const text = textarea.value;
+  const now = new Date().toLocaleString();
+  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/comments`);
+  await addDoc(commentRef, { text, timestamp: now });
+  await viewDiary(writer, dateId);
+  textarea.value = "";
+}
+
+window.previewImage = function() {
+  const input = document.getElementById("imageInput");
+  imageFile = input.files[0];
+  if (imageFile) {
+    preview.src = URL.createObjectURL(imageFile);
+    preview.style.display = "block";
+  } else {
+    preview.style.display = "none";
+  }
+}
+
+async function insertDefaultEntryText() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  let locationStr = '(위치 불러오는 중...)';
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+        const data = await res.json();
+        const city = data.address.city || data.address.town || data.address.village || data.address.state || '';
+        locationStr = `📍 ${city}`;
+      } catch {
+        locationStr = "(위치 불러오기 실패)";
+      }
+      editor.innerHTML = `<p><strong>${dateStr} · ${timeStr} · ${locationStr}</strong></p><p><br></p>`;
+    });
+  } else {
+    editor.innerHTML = `<p><strong>${dateStr} · ${timeStr} · (위치 무지우)</strong></p><p><br></p>`;
+  }
+}
+
+window.addEmoji = function(emoji) {
+  const textarea = document.getElementById("commentText");
+  textarea.value += emoji;
+  textarea.focus();
+}
+
+function updateEditorColor() {
+  const writer = writerSelect.value;
+  if (writer === "hanna") {
+    editor.classList.add("pink-bg");
+    editor.classList.remove("blue-bg");
+  } else {
+    editor.classList.add("blue-bg");
+    editor.classList.remove("pink-bg");
+  }
+  insertDefaultEntryText();
+}
+
+updateEditorColor();
+loadDiaryList();
+</script>
+</body>
+</html>
