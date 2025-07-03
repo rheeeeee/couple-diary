@@ -157,40 +157,45 @@
     loadDiaryList();
   }
 
-  async function saveDiary() {
-    const content = editor.innerHTML;
-    if (!content || content.trim() === "") {
-      alert("내용을 입력해주세요!");
-      return;
-    }
-
-    alert("⏳ 저장 중입니다...");
-    const now = new Date();
-    const dateId = now.toISOString().slice(0, 10);
-    const uid = currentUser.uid;
-    const entryId = Date.now().toString(); // 고유한 entry ID
-    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
-
-    let imageUrl = "";
-    if (imageFile) {
-      const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      imageUrl = await getDownloadURL(storageRef);
-    }
-
-    await setDoc(entryRef, {
-      content,
-      createdAt: now.toLocaleString(),
-      image: imageUrl
-    });
-
-    alert("🌼 저장되었습니다!");
-    editor.innerHTML = "";
-    imageFile = null;
-    preview.style.display = "none";
-    insertDefaultEntryText();
-    loadDiaryList();
+async function saveDiary() {
+  const content = editor.innerHTML;
+  if (!content || content.trim() === "") {
+    alert("내용을 입력해주세요!");
+    return;
   }
+
+  alert("⏳ 저장 중입니다...");
+  const now = new Date();
+  const dateId = now.toISOString().slice(0, 10);
+  const uid = currentUser.uid;
+  const entryId = Date.now().toString();
+
+  // ✅ entries/{dateId} 문서 먼저 생성 (중간 경로 보장)
+  const entryDateRef = doc(db, `diary/${uid}/entries/${dateId}`);
+  await setDoc(entryDateRef, { exists: true }, { merge: true });
+
+  const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
+
+  let imageUrl = "";
+  if (imageFile) {
+    const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
+    await uploadBytes(storageRef, imageFile);
+    imageUrl = await getDownloadURL(storageRef);
+  }
+
+  await setDoc(entryRef, {
+    content,
+    createdAt: now.toLocaleString(),
+    image: imageUrl
+  });
+
+  alert("🌼 저장되었습니다!");
+  editor.innerHTML = "";
+  imageFile = null;
+  preview.style.display = "none";
+  insertDefaultEntryText();
+  loadDiaryList();
+}
 
   async function loadDiaryList() {
     const uid = currentUser.uid;
