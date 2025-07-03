@@ -50,10 +50,9 @@
       width: 200px;
       font-size: 14px;
     }
-    
     .pink-bg { background-color: #ffe6f0; }
     .blue-bg { background-color: #e6f3ff; }
-    
+
     @media (max-width: 768px) {
       .container { flex-direction: column; height: auto; }
       .left, .right { border: none; height: auto; }
@@ -136,55 +135,56 @@
     }
   });
 
- function showDiaryApp() {
-  loginArea.style.display = "none";
-  diaryApp.style.display = "flex";
-  userLabel.innerText = `👤 ${currentUser.email}`;
-  insertDefaultEntryText();
-  loadDiaryList();
+  function showDiaryApp() {
+    loginArea.style.display = "none";
+    diaryApp.style.display = "flex";
 
-  // ✅ 사용자 배경색 스타일 적용
-  const bg = currentUser.email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
-  editor.classList.remove("pink-bg", "blue-bg");
-  editor.classList.add(bg);
-}
+    const isHanna = currentUser.email === "rheehanna27@gmail.com";
+    const nickname = isHanna ? "👸 한나" : "🤴 석민";
+    const bg = isHanna ? "pink-bg" : "blue-bg";
+
+    userLabel.innerText = nickname;
+
+    editor.className = "editor"; // 초기화
+    editor.classList.add(bg);    // 배경색 적용
+
+    insertDefaultEntryText();
+    loadDiaryList();
+  }
 
   async function saveDiary() {
-  console.log("📝 저장 버튼 눌림!"); // 개발자용 콘솔 확인용
-  alert("⏳ 저장 중입니다..."); // 사용자에게 알림
+    const content = editor.innerHTML;
+    if (!content || content.trim() === "") {
+      alert("내용을 입력해주세요!");
+      return;
+    }
 
-  const content = editor.innerHTML;
-  if (!content || content.trim() === "") {
-    alert("내용을 입력해주세요!");
-    return;
+    alert("⏳ 저장 중입니다...");
+    const now = new Date();
+    const dateId = now.toISOString().slice(0, 10);
+    const uid = currentUser.uid;
+    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}`));
+
+    let imageUrl = "";
+    if (imageFile) {
+      const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
+      await uploadBytes(storageRef, imageFile);
+      imageUrl = await getDownloadURL(storageRef);
+    }
+
+    await setDoc(entryRef, {
+      content,
+      createdAt: now.toLocaleString(),
+      image: imageUrl
+    });
+
+    alert("🌼 저장되었습니다!");
+    editor.innerHTML = "";
+    imageFile = null;
+    preview.style.display = "none";
+    insertDefaultEntryText();
+    loadDiaryList();
   }
-
-  const now = new Date();
-  const dateId = now.toISOString().slice(0, 10);
-  const uid = currentUser.uid;
-  const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}`));
-
-  let imageUrl = "";
-  if (imageFile) {
-    const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
-    await uploadBytes(storageRef, imageFile);
-    imageUrl = await getDownloadURL(storageRef);
-  }
-
-  await setDoc(entryRef, {
-    content,
-    createdAt: now.toLocaleString(),
-    image: imageUrl
-  });
-
-  alert("🌼 저장되었습니다!");
-  editor.innerHTML = "";
-  imageFile = null;
-  preview.style.display = "none";
-  insertDefaultEntryText();
-  loadDiaryList();
-}
-
 
   async function loadDiaryList() {
     const uid = currentUser.uid;
