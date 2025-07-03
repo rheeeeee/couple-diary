@@ -12,7 +12,7 @@
       padding: 0;
     }
     .container {
-      display: flex;
+      display: none; /* 로그인 전엔 숨김 */
       flex-direction: row;
       height: 100vh;
     }
@@ -39,30 +39,30 @@
     #preview { max-width: 200px; margin: 10px auto; display: none; }
     .pink-bg { background-color: #ffe6f0; }
     .blue-bg { background-color: #e6f3ff; }
-    #commentBox { margin-top: 20px; }
     #commentText { width: 100%; border-radius: 8px; resize: none; height: 60px; }
+    .auth-buttons {
+      text-align: center;
+      padding: 50px;
+    }
     @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-        height: auto;
-      }
-      .left, .right {
-        border: none;
-        height: auto;
-      }
+      .container { flex-direction: column; height: auto; }
+      .left, .right { border: none; height: auto; }
     }
   </style>
 </head>
 <body>
-<h2 style="text-align:center; padding:10px;"> 한나❤️석민 공유일기 </h2>
-<div class="container">
+<h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
+
+<!-- 로그인 버튼 -->
+<div class="auth-buttons" id="login-area">
+  <button id="login-btn">🔐 Google 로그인</button>
+</div>
+
+<!-- 일기장 영역 -->
+<div class="container" id="diary-app">
   <div class="left">
     <div class="controls">
-      <label>작성자:</label>
-      <select id="writer" onchange="loadDiaryList(); updateEditorColor();">
-        <option value="hanna">한나</option>
-        <option value="seokmin">석민</option>
-      </select>
+      <label id="user-label"></label>
       <button onclick="saveDiary()">📂 일기 저장</button>
     </div>
     <div id="editor" class="editor" contenteditable="true"></div>
@@ -77,174 +77,158 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-storage.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
+  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-storage.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBUriLDY8uRXONDUDVRLtbu1VI2iRvc-Bk",
-  authDomain: "couple-diary-1f390.firebaseapp.com",
-  projectId: "couple-diary-1f390",
-  storageBucket: "couple-diary-1f390.appspot.com",
-  messagingSenderId: "274498048639",
-  appId: "1:274498048639:web:3706b378a8281c2a47654a"
-};
+  const firebaseConfig = {
+    apiKey: "AIzaSyBUriLDY8uRXONDUDVRLtbu1VI2iRvc-Bk",
+    authDomain: "couple-diary-1f390.firebaseapp.com",
+    projectId: "couple-diary-1f390",
+    storageBucket: "couple-diary-1f390.appspot.com",
+    messagingSenderId: "274498048639",
+    appId: "1:274498048639:web:3706b378a8281c2a47654a"
+  };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const storage = getStorage(app);
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  const provider = new GoogleAuthProvider();
 
-const writerSelect = document.getElementById("writer");
-const editor = document.getElementById("editor");
-const preview = document.getElementById("preview");
-let imageFile = null;
+  const loginBtn = document.getElementById("login-btn");
+  const loginArea = document.getElementById("login-area");
+  const diaryApp = document.getElementById("diary-app");
+  const userLabel = document.getElementById("user-label");
+  const editor = document.getElementById("editor");
+  const preview = document.getElementById("preview");
+  let imageFile = null;
+  let currentUser = null;
 
-async function saveDiary() {
-  const writer = writerSelect.value;
-  const content = editor.innerHTML;
-  const now = new Date();
-  const dateId = now.toISOString().slice(0, 10);
+  loginBtn.onclick = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      currentUser = result.user;
+      showDiaryApp();
+    } catch (error) {
+      alert("로그인 실패!");
+    }
+  };
 
-  const entriesRef = collection(db, `diary/${writer}/entries/${dateId}`);
-  const newEntryRef = doc(entriesRef); // 고유 ID 생성
-
-  let imageUrl = "";
-  if (imageFile) {
-    const storageRef = ref(storage, `${writer}/${dateId}_${imageFile.name}`);
-    await uploadBytes(storageRef, imageFile);
-    imageUrl = await getDownloadURL(storageRef);
-  }
-
-  await setDoc(newEntryRef, {
-    content,
-    createdAt: now.toLocaleString(),
-    image: imageUrl
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      currentUser = user;
+      showDiaryApp();
+    }
   });
 
-  alert("🌼 저장되었습니다!");
-  editor.innerHTML = "";
-  imageFile = null;
-  preview.style.display = "none";
-  insertDefaultEntryText();
-  loadDiaryList();
-}
+  function showDiaryApp() {
+    loginArea.style.display = "none";
+    diaryApp.style.display = "flex";
+    userLabel.innerText = `👤 ${currentUser.displayName}`;
+    insertDefaultEntryText();
+    loadDiaryList();
+  }
 
-async function loadDiaryList() {
-  const writer = writerSelect.value;
-  const rootRef = collection(db, `diary/${writer}/entries`);
-  const rootSnap = await getDocs(rootRef);
+  async function saveDiary() {
+    const content = editor.innerHTML;
+    const now = new Date();
+    const dateId = now.toISOString().slice(0, 10);
+    const uid = currentUser.uid;
+    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}`)); // random entry
 
-  let html = "<ul>";
-  for (const folder of rootSnap.docs) {
-    const dateId = folder.id;
-    const entriesRef = collection(db, `diary/${writer}/entries/${dateId}`);
-    const entriesSnap = await getDocs(entriesRef);
-    entriesSnap.forEach(doc => {
-      html += `<li onclick="viewDiary('${writer}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
+    let imageUrl = "";
+    if (imageFile) {
+      const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
+      await uploadBytes(storageRef, imageFile);
+      imageUrl = await getDownloadURL(storageRef);
+    }
+
+    await setDoc(entryRef, {
+      content,
+      createdAt: now.toLocaleString(),
+      image: imageUrl
     });
-  }
-  html += "</ul>";
-  document.getElementById("list").innerHTML = html;
-}
 
-window.viewDiary = async function(writer, dateId, entryId) {
-  const docRef = doc(db, `diary/${writer}/entries/${dateId}/${entryId}`);
-  const snap = await getDoc(docRef);
-  const data = snap.data();
-  const bgColor = writer === "hanna" ? "pink-bg" : "blue-bg";
-
-  let html = `
-    <h3>📖 ${writer === "hanna" ? "한나" : "석민"}의 일기 (${dateId})</h3>
-    <div class="${bgColor}" style="padding:10px; border-radius:10px;">
-      ${data.content}
-      ${data.image ? `<br><img src="${data.image}" style="max-width:100%; margin-top:10px;">` : ""}
-    </div>
-    <div style="margin: 10px 0; display: flex; align-items: center; gap: 10px;">
-      <div id="emojiBox">
-        <button onclick="addEmoji('❤️')">❤️</button>
-        <button onclick="addEmoji('😊')">😊</button>
-        <button onclick="addEmoji('😢')">😢</button>
-      </div>
-      <button onclick="saveComment('${writer}', '${dateId}', '${entryId}')">댓글 저장</button>
-    </div>
-    <textarea id="commentText" placeholder="댓글을 작성하세요" style="width:100%; margin-top:10px;"></textarea>
-  `;
-
-  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/${entryId}/comments`);
-  const comments = await getDocs(commentRef);
-  html += `<div><h4>📆 댓글 목록</h4><ul>`;
-  comments.forEach(c => {
-    html += `<li>${c.data().text} (${c.data().timestamp})</li>`;
-  });
-  html += `</ul></div>`;
-  document.getElementById("viewEntry").innerHTML = html;
-}
-
-window.saveComment = async function(writer, dateId, entryId) {
-  const textarea = document.getElementById("commentText");
-  const text = textarea.value;
-  const now = new Date().toLocaleString();
-  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/${entryId}/comments`);
-  await addDoc(commentRef, { text, timestamp: now });
-  await viewDiary(writer, dateId, entryId);
-  textarea.value = "";
-}
-
-window.previewImage = function() {
-  const input = document.getElementById("imageInput");
-  imageFile = input.files[0];
-  if (imageFile) {
-    preview.src = URL.createObjectURL(imageFile);
-    preview.style.display = "block";
-  } else {
+    alert("🌼 저장되었습니다!");
+    editor.innerHTML = "";
+    imageFile = null;
     preview.style.display = "none";
+    insertDefaultEntryText();
+    loadDiaryList();
   }
-}
 
-async function insertDefaultEntryText() {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-  let locationStr = '(위치 불러오는 중...)';
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(async pos => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-        const data = await res.json();
-        const city = data.address.city || data.address.town || data.address.village || data.address.state || '';
-        locationStr = `📍 ${city}`;
-      } catch {
-        locationStr = "(위치 불러오기 실패)";
-      }
-      editor.innerHTML = `<p><strong>${dateStr} · ${timeStr} · ${locationStr}</strong></p><p><br></p>`;
+  async function loadDiaryList() {
+    const uid = currentUser.uid;
+    const rootRef = collection(db, `diary/${uid}/entries`);
+    const rootSnap = await getDocs(rootRef);
+
+    let html = "<ul>";
+    for (const folder of rootSnap.docs) {
+      const dateId = folder.id;
+      const entriesRef = collection(db, `diary/${uid}/entries/${dateId}`);
+      const entriesSnap = await getDocs(entriesRef);
+      entriesSnap.forEach(doc => {
+        html += `<li onclick="viewDiary('${uid}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
+      });
+    }
+    html += "</ul>";
+    document.getElementById("list").innerHTML = html;
+  }
+
+  window.viewDiary = async function(uid, dateId, entryId) {
+    const docRef = doc(db, `diary/${uid}/entries/${dateId}/${entryId}`);
+    const snap = await getDoc(docRef);
+    const data = snap.data();
+
+    let html = `
+      <h3>📖 일기 (${dateId})</h3>
+      <div style="padding:10px; border-radius:10px; background:#f9f9f9;">
+        ${data.content}
+        ${data.image ? `<br><img src="${data.image}" style="max-width:100%; margin-top:10px;">` : ""}
+      </div>
+      <textarea id="commentText" placeholder="댓글 작성" style="margin-top:10px;"></textarea>
+      <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
+    `;
+
+    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/${entryId}/comments`);
+    const comments = await getDocs(commentRef);
+    html += `<div><h4>📆 댓글</h4><ul>`;
+    comments.forEach(c => {
+      html += `<li>${c.data().text} (${c.data().timestamp})</li>`;
     });
-  } else {
-    editor.innerHTML = `<p><strong>${dateStr} · ${timeStr} · (위치 무지우)</strong></p><p><br></p>`;
+    html += `</ul></div>`;
+    document.getElementById("viewEntry").innerHTML = html;
+  };
+
+  window.saveComment = async function(uid, dateId, entryId) {
+    const textarea = document.getElementById("commentText");
+    const text = textarea.value;
+    const now = new Date().toLocaleString();
+    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/${entryId}/comments`);
+    await addDoc(commentRef, { text, timestamp: now });
+    await viewDiary(uid, dateId, entryId);
+    textarea.value = "";
+  };
+
+  window.previewImage = function() {
+    const input = document.getElementById("imageInput");
+    imageFile = input.files[0];
+    if (imageFile) {
+      preview.src = URL.createObjectURL(imageFile);
+      preview.style.display = "block";
+    } else {
+      preview.style.display = "none";
+    }
+  };
+
+  async function insertDefaultEntryText() {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+    const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    editor.innerHTML = `<p><strong>${dateStr} · ${timeStr}</strong></p><p><br></p>`;
   }
-}
-
-window.addEmoji = function(emoji) {
-  const textarea = document.getElementById("commentText");
-  textarea.value += emoji;
-  textarea.focus();
-}
-
-function updateEditorColor() {
-  const writer = writerSelect.value;
-  if (writer === "hanna") {
-    editor.classList.add("pink-bg");
-    editor.classList.remove("blue-bg");
-  } else {
-    editor.classList.add("blue-bg");
-    editor.classList.remove("pink-bg");
-  }
-  insertDefaultEntryText();
-}
-
-updateEditorColor();
-loadDiaryList();
 </script>
 </body>
 </html>
