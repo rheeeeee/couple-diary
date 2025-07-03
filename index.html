@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>한나와 석민이의 공용일기장</title>
+  <title>한나와 석민이의 공유일기장</title>
   <style>
     body {
       font-family: sans-serif;
@@ -36,7 +36,11 @@
       border-radius: 8px;
       font-size: 14px;
     }
-    #preview { max-width: 200px; margin: 10px auto; display: none; }
+    #preview {
+      max-width: 200px;
+      margin: 10px auto;
+      display: none;
+    }
     .auth-box {
       text-align: center;
       margin: 50px auto;
@@ -51,15 +55,29 @@
     }
     .pink-bg { background-color: #ffe6f0; }
     .blue-bg { background-color: #e6f3ff; }
+
+    .entry-date {
+      font-weight: bold;
+      margin-bottom: 5px;
+      font-size: 15px;
+    }
+    .entry-content {
+      font-weight: normal;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
-<h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공용일기장 🌸</h2>
+<h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
+
 <div class="auth-box" id="login-area">
-  <input type="text" id="username" placeholder="아이디 (hanna / seokmin)" />
+  <input type="text" id="username" placeholder="아이디 (예: hanna)" />
   <input type="password" id="password" placeholder="비밀번호" />
   <button id="login-btn">🔐 로그인</button>
 </div>
+
 <div class="container" id="diary-app">
   <div class="left">
     <div class="controls">
@@ -71,9 +89,11 @@
     <img id="preview" src="">
   </div>
   <div class="right">
-    <div id="list">(저장된 일기 불러오는 중...)</div>
+    <h3>📚 저장된 일기</h3>
+    <div id="list">불러오는 중...</div>
   </div>
 </div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, getDocs, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
@@ -109,10 +129,12 @@
     const username = document.getElementById("username").value.trim().toLowerCase();
     const password = document.getElementById("password").value.trim();
     const user = users[username];
+
     if (!user || user.password !== password) {
-      alert("❌ 오류: 아이디 또는 비밀번호 잘못!");
+      alert("❌ 로그인 실패: 아이디 또는 비밀번호가 틀렸어요!");
       return;
     }
+
     currentUser = { username, ...user };
     showDiaryApp();
   };
@@ -134,23 +156,28 @@
   async function saveDiary() {
     const content = editor.innerHTML;
     if (!content.trim()) return alert("내용을 입력해주세요!");
+
     const now = new Date();
     const dateId = now.toISOString().slice(0, 10);
     const uid = getSafeUid();
     const entryId = Date.now().toString();
     const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
+
     let imageUrl = "";
     if (imageFile) {
       const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
       await uploadBytes(storageRef, imageFile);
       imageUrl = await getDownloadURL(storageRef);
     }
-    await setDoc(entryRef, {
+
+    const data = {
       content,
       createdAt: now.toLocaleString(),
       image: imageUrl
-    });
-    alert("🌼 저장되었어요!");
+    };
+
+    await setDoc(entryRef, data);
+    alert("🌼 저장되었습니다!");
     editor.innerHTML = "";
     imageFile = null;
     preview.style.display = "none";
@@ -162,35 +189,29 @@
     const uid = getSafeUid();
     const rootRef = collection(db, `diary/${uid}/entries`);
     const rootSnap = await getDocs(rootRef);
-    let html = "<h3>📓 저장된 일기</h3>";
+
+    let html = "";
     for (const folder of rootSnap.docs) {
       const dateId = folder.id;
-      const itemsSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
-      for (const itemDoc of itemsSnap.docs) {
-        const entry = itemDoc.data();
-        const entryId = itemDoc.id;
-        html += `<div style="margin-bottom:20px; padding:10px; border-radius:10px; background:#f9f9f9;">
-          <h4>📅 ${dateId}</h4>
-          <div>${entry.content}</div>
-          ${entry.image ? `<img src="${entry.image}" style="max-width:100%; margin-top:10px;">` : ""}
-          <div style="display:flex; align-items:center; gap:5px; margin-top:10px;">
-            <textarea id="commentText-${entryId}" placeholder="댓글 작성" style="flex:1; border-radius:8px; resize:none; height:60px;"></textarea>
-            <button onclick="insertEmoji('😊', '${entryId}')">😊</button>
-            <button onclick="insertEmoji('❤️', '${entryId}')">❤️</button>
-            <button onclick="insertEmoji('😢', '${entryId}')">😢</button>
-            <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
-          </div>`;
-        const commentsPath = `diary/${uid}/entries/${dateId}/items/${entryId}/comments`;
-        const commentsSnap = await getDocs(collection(db, commentsPath));
-        if (!commentsSnap.empty) {
-          html += `<ul style="padding-left:20px; margin-top:10px;">`;
-          commentsSnap.forEach(commentDoc => {
-            const comment = commentDoc.data();
-            html += `<li style="margin-bottom:4px;">${comment.text} <span style="font-size:12px; color:#888;">(${comment.timestamp})</span></li>`;
-          });
-          html += `</ul>`;
-        }
-        html += `</div>`;
+      const entriesSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
+      for (const docSnap of entriesSnap.docs) {
+        const data = docSnap.data();
+        const entryId = docSnap.id;
+
+        html += `
+          <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: #f9f9f9;">
+            <div class="entry-date">${dateId} · ${data.createdAt}</div>
+            <div class="entry-content">${data.content}</div>
+            ${data.image ? `<img src="${data.image}" style="max-width: 100%; margin-top: 10px;">` : ""}
+            <div style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
+              <textarea id="commentText-${entryId}" placeholder="댓글 작성" style="flex: 1; border-radius: 8px; resize: none; height: 60px;"></textarea>
+              <button onclick="insertEmoji('😊', '${entryId}')">😊</button>
+              <button onclick="insertEmoji('❤️', '${entryId}')">❤️</button>
+              <button onclick="insertEmoji('😢', '${entryId}')">😢</button>
+              <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
+            </div>
+          </div>
+        `;
       }
     }
     document.getElementById("list").innerHTML = html;
@@ -198,8 +219,10 @@
 
   window.insertEmoji = function(emoji, entryId) {
     const textarea = document.getElementById(`commentText-${entryId}`);
-    textarea.value += emoji;
-    textarea.focus();
+    if (textarea) {
+      textarea.value += emoji;
+      textarea.focus();
+    }
   };
 
   window.saveComment = async function(uid, dateId, entryId) {
@@ -208,6 +231,7 @@
     const now = new Date().toLocaleString();
     const path = `diary/${uid}/entries/${dateId}/items/${entryId}/comments`;
     await addDoc(collection(db, path), { text, timestamp: now });
+    textarea.value = "";
     loadDiaryList();
   };
 
@@ -224,8 +248,6 @@
     const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
     editor.innerHTML = `<p><strong>${dateStr} · ${timeStr}</strong></p><p><br></p>`;
   }
-
-  window.saveDiary = saveDiary;
 </script>
 </body>
 </html>
