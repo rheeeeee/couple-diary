@@ -74,7 +74,7 @@
   <div class="left">
     <div class="controls">
       <label id="user-label"></label>
-      <button id="save-btn">📂 일기 저장</button>
+      <button onclick="saveDiary()">📂 일기 저장</button>
     </div>
     <div id="editor" class="editor" contenteditable="true"></div>
     <input type="file" id="imageInput" accept="image/*" onchange="previewImage()" />
@@ -87,6 +87,7 @@
   </div>
 </div>
 
+<!-- Firebase 로직 -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
@@ -109,7 +110,6 @@
 
   let currentUser = null;
   const loginBtn = document.getElementById("login-btn");
-  const saveBtn = document.getElementById("save-btn");
   const diaryApp = document.getElementById("diary-app");
   const loginArea = document.getElementById("login-area");
   const userLabel = document.getElementById("user-label");
@@ -143,9 +143,8 @@
     const email = currentUser.email;
     const name = email === "rheehanna27@gmail.com" ? "한나 👸🌸" :
                  email === "ezdaez28@gmail.com" ? "석민 🤴💙" : email;
-    userLabel.innerText = `${name}`;
+    userLabel.innerText = `👤 ${name}`;
 
-    // 배경색 설정
     const bg = email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
     editor.classList.remove("pink-bg", "blue-bg");
     editor.classList.add(bg);
@@ -165,7 +164,9 @@
     const now = new Date();
     const dateId = now.toISOString().slice(0, 10);
     const uid = currentUser.uid;
-    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}`));
+
+    const dateRef = doc(db, `diary/${uid}/entries/${dateId}`);
+    const entryRef = doc(collection(dateRef, 'items')); // 🔥 여기 핵심 수정
 
     let imageUrl = "";
     if (imageFile) {
@@ -196,7 +197,7 @@
     let html = "<ul>";
     for (const folder of rootSnap.docs) {
       const dateId = folder.id;
-      const entriesRef = collection(db, `diary/${uid}/entries/${dateId}`);
+      const entriesRef = collection(db, `diary/${uid}/entries/${dateId}/items`);
       const entriesSnap = await getDocs(entriesRef);
       entriesSnap.forEach(doc => {
         html += `<li onclick="viewDiary('${uid}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
@@ -207,7 +208,7 @@
   }
 
   window.viewDiary = async function(uid, dateId, entryId) {
-    const docRef = doc(db, `diary/${uid}/entries/${dateId}/${entryId}`);
+    const docRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
     const snap = await getDoc(docRef);
     const data = snap.data();
 
@@ -221,7 +222,7 @@
       <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
     `;
 
-    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/${entryId}/comments`);
+    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`);
     const comments = await getDocs(commentRef);
     html += `<div><h4>📆 댓글</h4><ul>`;
     comments.forEach(c => {
@@ -235,7 +236,7 @@
     const textarea = document.getElementById("commentText");
     const text = textarea.value;
     const now = new Date().toLocaleString();
-    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/${entryId}/comments`);
+    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`);
     await addDoc(commentRef, { text, timestamp: now });
     await viewDiary(uid, dateId, entryId);
     textarea.value = "";
@@ -259,9 +260,7 @@
     editor.innerHTML = `<p><strong>${dateStr} · ${timeStr}</strong></p><p><br></p>`;
   }
 
-  // ✅ 버튼에 이벤트 연결
-  saveBtn.addEventListener("click", saveDiary);
-
+  window.saveDiary = saveDiary;
 </script>
 </body>
 </html>
