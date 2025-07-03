@@ -164,7 +164,8 @@
     const dateId = now.toISOString().slice(0, 10);
     const uid = currentUser.uid;
     const entryId = Date.now().toString(); // 고유한 entry ID
-    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
+    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${crypto.randomUUID()}`);
+
 
     let imageUrl = "";
     if (imageFile) {
