@@ -132,13 +132,18 @@
     }
   });
 
-  function showDiaryApp() {
-    loginArea.style.display = "none";
-    diaryApp.style.display = "flex";
-    userLabel.innerText = `👤 ${currentUser.email}`;
-    insertDefaultEntryText();
-    loadDiaryList();
-  }
+ function showDiaryApp() {
+  loginArea.style.display = "none";
+  diaryApp.style.display = "flex";
+  userLabel.innerText = `👤 ${currentUser.email}`;
+  insertDefaultEntryText();
+  loadDiaryList();
+
+  // ✅ 사용자 배경색 스타일 적용
+  const bg = currentUser.email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
+  editor.classList.remove("pink-bg", "blue-bg");
+  editor.classList.add(bg);
+}
 
   async function saveDiary() {
     const content = editor.innerHTML;
