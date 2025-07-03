@@ -185,28 +185,27 @@
     loadDiaryList();
   }
 
- async function loadDiaryList() {
+async function loadDiaryList() {
   const uid = getSafeUid();
   const rootRef = collection(db, `diary/${uid}/entries`);
   const rootSnap = await getDocs(rootRef);
 
   let html = "";
 
-  // 날짜 기준 내림차순 정렬 (최신일 먼저)
-  const sortedDateDocs = rootSnap.docs.sort((a, b) => b.id.localeCompare(a.id));
+  // 날짜 최신순 정렬
+  const sortedDateDocs = rootSnap.docs.sort((a, b) => a.id < b.id ? 1 : -1);
 
   for (const folder of sortedDateDocs) {
     const dateId = folder.id;
     const entriesSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
 
-    // entryId 기준 내림차순 정렬 (최신글 먼저)
-    const sortedEntries = entriesSnap.docs.sort((a, b) => b.id.localeCompare(a.id));
+    // 글 최신순 정렬
+    const sortedEntries = entriesSnap.docs.sort((a, b) => a.id < b.id ? 1 : -1);
 
     for (const docSnap of sortedEntries) {
       const data = docSnap.data();
       const entryId = docSnap.id;
 
-      // 댓글 가져오기
       const commentSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`));
       let commentHtml = '';
       commentSnap.forEach(comment => {
@@ -234,6 +233,7 @@
 
   document.getElementById("list").innerHTML = html;
 }
+
 
   window.insertEmoji = function(emoji, entryId) {
     const textarea = document.getElementById(`commentText-${entryId}`);
