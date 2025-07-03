@@ -1,4 +1,3 @@
-<!-- 전체 코드: 기존 방식 + 개선 방식 모두 반영 -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -57,11 +56,13 @@
 </head>
 <body>
 <h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
+
 <div class="auth-box" id="login-area">
-  <input type="email" id="email" placeholder="이메일" />
+  <input type="text" id="username" placeholder="아이디 (예: hanna)" />
   <input type="password" id="password" placeholder="비밀번호" />
   <button id="login-btn">🔐 로그인</button>
 </div>
+
 <div class="container" id="diary-app">
   <div class="left">
     <div class="controls">
@@ -78,9 +79,9 @@
     <div id="viewEntry"></div>
   </div>
 </div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, getDocs, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-storage.js";
 
@@ -93,9 +94,21 @@
     appId: "1:274498048639:web:3706b378a8281c2a47654a"
   });
 
-  const auth = getAuth(app);
   const db = getFirestore(app);
   const storage = getStorage(app);
+
+  const users = {
+    hanna: {
+      password: "seokminlove",
+      name: "한나 👸🌸",
+      color: "pink-bg"
+    },
+    seokmin: {
+      password: "hannalove",
+      name: "석민 🤴💙",
+      color: "blue-bg"
+    }
+  };
 
   let currentUser = null;
   const loginBtn = document.getElementById("login-btn");
@@ -106,40 +119,34 @@
   const preview = document.getElementById("preview");
   let imageFile = null;
 
-  loginBtn.onclick = async () => {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-    try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      currentUser = result.user;
-      showDiaryApp();
-    } catch (err) {
-      alert("❌ 로그인 실패: " + err.message);
-    }
-  };
+  loginBtn.onclick = () => {
+    const username = document.getElementById("username").value.trim().toLowerCase();
+    const password = document.getElementById("password").value.trim();
+    const user = users[username];
 
-  onAuthStateChanged(auth, user => {
-    if (user) {
-      currentUser = user;
-      showDiaryApp();
+    if (!user || user.password !== password) {
+      alert("❌ 로그인 실패: 아이디 또는 비밀번호가 틀렸어요!");
+      return;
     }
-  });
+
+    currentUser = { username, ...user };
+    showDiaryApp();
+  };
 
   function showDiaryApp() {
     loginArea.style.display = "none";
     diaryApp.style.display = "flex";
 
-    const email = currentUser.email;
-    const name = email === "rheehanna27@gmail.com" ? "한나 👸🌸" :
-                 email === "ezdaez28@gmail.com" ? "석민 🤴💙" : email;
-    userLabel.innerText = `👤 ${name}`;
-
-    const bg = email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
+    userLabel.innerText = `👤 ${currentUser.name}`;
     editor.classList.remove("pink-bg", "blue-bg");
-    editor.classList.add(bg);
+    editor.classList.add(currentUser.color);
 
     insertDefaultEntryText();
     loadDiaryList();
+  }
+
+  function getSafeUid() {
+    return currentUser.username;
   }
 
   async function saveDiary() {
@@ -148,16 +155,10 @@
 
     const now = new Date();
     const dateId = now.toISOString().slice(0, 10);
-    const uid = currentUser.uid;
+    const uid = getSafeUid();
     const entryId = Date.now().toString();
 
-    // 📁 방법 1: entries 하위에 items 문서
-    const entryDateRef = doc(db, `diary/${uid}/entries/${dateId}`);
-    await setDoc(entryDateRef, { exists: true }, { merge: true });
-    const entryRef1 = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
-
-    // 📁 방법 2: diary/uid/dateId/items 문서
-    const entryRef2 = doc(db, `diary/${uid}/${dateId}/items/${entryId}`);
+    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
 
     let imageUrl = "";
     if (imageFile) {
@@ -172,10 +173,7 @@
       image: imageUrl
     };
 
-    await Promise.all([
-      setDoc(entryRef1, data),
-      setDoc(entryRef2, data)
-    ]);
+    await setDoc(entryRef, data);
 
     alert("🌼 저장되었습니다!");
     editor.innerHTML = "";
@@ -186,46 +184,28 @@
   }
 
   async function loadDiaryList() {
-    const uid = currentUser.uid;
-    const paths = [
-      collection(db, `diary/${uid}/entries`),
-      collection(db, `diary/${uid}`)
-    ];
+    const uid = getSafeUid();
+    const rootRef = collection(db, `diary/${uid}/entries`);
+    const rootSnap = await getDocs(rootRef);
 
     let html = "<ul>";
-    for (const rootRef of paths) {
-      const rootSnap = await getDocs(rootRef);
-      for (const folder of rootSnap.docs) {
-        const dateId = folder.id;
-        for (const path of [
-          `diary/${uid}/entries/${dateId}/items`,
-          `diary/${uid}/${dateId}/items`
-        ]) {
-          const entriesSnap = await getDocs(collection(db, path));
-          entriesSnap.forEach(doc => {
-            html += `<li onclick="viewDiary('${uid}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
-          });
-        }
-      }
+    for (const folder of rootSnap.docs) {
+      const dateId = folder.id;
+      const entriesSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
+      entriesSnap.forEach(doc => {
+        html += `<li onclick="viewDiary('${uid}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
+      });
     }
     html += "</ul>";
     document.getElementById("list").innerHTML = html;
   }
 
   window.viewDiary = async function(uid, dateId, entryId) {
-    let data;
-    for (const path of [
-      `diary/${uid}/entries/${dateId}/items/${entryId}`,
-      `diary/${uid}/${dateId}/items/${entryId}`
-    ]) {
-      const snap = await getDoc(doc(db, path));
-      if (snap.exists()) {
-        data = snap.data(); break;
-      }
-    }
+    const path = `diary/${uid}/entries/${dateId}/items/${entryId}`;
+    const snap = await getDoc(doc(db, path));
+    if (!snap.exists()) return alert("❌ 일기를 찾을 수 없습니다!");
 
-    if (!data) return alert("❌ 일기를 찾을 수 없습니다!");
-
+    const data = snap.data();
     let html = `
       <h3>📖 일기 (${dateId})</h3>
       <div style="padding:10px; border-radius:10px; background:#f9f9f9;">
@@ -235,21 +215,14 @@
       <textarea id="commentText" placeholder="댓글 작성" style="margin-top:10px;"></textarea>
       <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
     `;
-
     document.getElementById("viewEntry").innerHTML = html;
   };
 
   window.saveComment = async function(uid, dateId, entryId) {
     const text = document.getElementById("commentText").value;
     const now = new Date().toLocaleString();
-    for (const path of [
-      `diary/${uid}/entries/${dateId}/items/${entryId}/comments`,
-      `diary/${uid}/${dateId}/items/${entryId}/comments`
-    ]) {
-      try {
-        await addDoc(collection(db, path), { text, timestamp: now });
-      } catch {}
-    }
+    const path = `diary/${uid}/entries/${dateId}/items/${entryId}/comments`;
+    await addDoc(collection(db, path), { text, timestamp: now });
     await viewDiary(uid, dateId, entryId);
     document.getElementById("commentText").value = "";
   };
