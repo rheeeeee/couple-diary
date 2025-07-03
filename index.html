@@ -153,86 +153,80 @@
     return currentUser.username;
   }
 
-  async function saveDiary() {
-    const content = editor.innerHTML;
-    if (!content.trim()) return alert("내용을 입력해주세요!");
+ async function saveDiary() {
+  const content = editor.innerHTML;
+  if (!content.trim()) return alert("내용을 입력해주세요!");
 
-    const now = new Date();
-    const dateId = now.toISOString().slice(0, 10);
-    const uid = getSafeUid();
-    const entryId = Date.now().toString();
-    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
+  const now = new Date();
+  const dateId = now.toISOString().slice(0, 10);
+  const entryId = Date.now().toString();
+  const entryRef = doc(db, `sharedDiaries/${dateId}_${entryId}`);
 
-    let imageUrl = "";
-    if (imageFile) {
-      const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      imageUrl = await getDownloadURL(storageRef);
-    }
-
-    const data = {
-      content,
-      createdAt: now.toLocaleString(),
-      image: imageUrl
-    };
-
-    await setDoc(entryRef, data);
-    alert("🌼 저장되었습니다!");
-    editor.innerHTML = "";
-    imageFile = null;
-    preview.style.display = "none";
-    insertDefaultEntryText();
-    loadDiaryList();
+  let imageUrl = "";
+  if (imageFile) {
+    const storageRef = ref(storage, `shared/${dateId}_${imageFile.name}`);
+    await uploadBytes(storageRef, imageFile);
+    imageUrl = await getDownloadURL(storageRef);
   }
 
+  const data = {
+    content,
+    createdAt: now.toLocaleString(),
+    author: currentUser.name,
+    username: currentUser.username,
+    image: imageUrl
+  };
+
+  await setDoc(entryRef, data);
+  alert("🌼 공유 일기로 저장되었습니다!");
+  editor.innerHTML = "";
+  imageFile = null;
+  preview.style.display = "none";
+  insertDefaultEntryText();
+  loadDiaryList();
+}
+
+
 async function loadDiaryList() {
-  const uid = getSafeUid();
-  const rootRef = collection(db, `diary/${uid}/entries`);
-  const rootSnap = await getDocs(rootRef);
+  const listRef = collection(db, "sharedDiaries");
+  const snapshot = await getDocs(listRef);
+
+  // 최신순 정렬
+  const sortedDocs = snapshot.docs.sort((a, b) => a.id < b.id ? 1 : -1);
 
   let html = "";
 
-  // 날짜 최신순 정렬
-  const sortedDateDocs = rootSnap.docs.sort((a, b) => a.id < b.id ? 1 : -1);
+  for (const docSnap of sortedDocs) {
+    const data = docSnap.data();
+    const entryId = docSnap.id;
 
-  for (const folder of sortedDateDocs) {
-    const dateId = folder.id;
-    const entriesSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items`));
+    const commentSnap = await getDocs(collection(db, `sharedDiaries/${entryId}/comments`));
+    let commentHtml = '';
+    commentSnap.forEach(comment => {
+      const c = comment.data();
+      commentHtml += `<div style="font-size:13px; margin-top:4px;">🗨️ ${c.text} <span style="font-size:11px; color:gray;">(${c.timestamp})</span></div>`;
+    });
 
-    // 글 최신순 정렬
-    const sortedEntries = entriesSnap.docs.sort((a, b) => a.id < b.id ? 1 : -1);
-
-    for (const docSnap of sortedEntries) {
-      const data = docSnap.data();
-      const entryId = docSnap.id;
-
-      const commentSnap = await getDocs(collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`));
-      let commentHtml = '';
-      commentSnap.forEach(comment => {
-        const c = comment.data();
-        commentHtml += `<div style="font-size:13px; margin-top:4px;">🗨️ ${c.text} <span style="font-size:11px; color:gray;">(${c.timestamp})</span></div>`;
-      });
-
-      html += `
-        <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: #f9f9f9;">
-          <div class="entry-date">${dateId} · ${data.createdAt}</div>
-          <div class="entry-content">${data.content}</div>
-          ${data.image ? `<img src="${data.image}" style="max-width: 100%; margin-top: 10px;">` : ""}
-          <div style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
-            <textarea id="commentText-${entryId}" placeholder="댓글 작성" style="flex: 1; border-radius: 8px; resize: none; height: 60px;"></textarea>
-            <button onclick="insertEmoji('😊', '${entryId}')">😊</button>
-            <button onclick="insertEmoji('❤️', '${entryId}')">❤️</button>
-            <button onclick="insertEmoji('😢', '${entryId}')">😢</button>
-            <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
-          </div>
-          ${commentHtml}
+    html += `
+      <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: #f9f9f9;">
+        <div class="entry-date">${data.createdAt} · ${data.author}</div>
+        <div class="entry-content">${data.content}</div>
+        ${data.image ? `<img src="${data.image}" style="max-width: 100%; margin-top: 10px;">` : ""}
+        <div style="display: flex; align-items: center; gap: 5px; margin-top: 10px;">
+          <textarea id="commentText-${entryId}" placeholder="댓글 작성" style="flex: 1; border-radius: 8px; resize: none; height: 60px;"></textarea>
+          <button onclick="insertEmoji('😊', '${entryId}')">😊</button>
+          <button onclick="insertEmoji('❤️', '${entryId}')">❤️</button>
+          <button onclick="insertEmoji('😢', '${entryId}')">😢</button>
+          <button onclick="saveComment('${entryId}')">댓글 저장</button>
         </div>
-      `;
-    }
+        ${commentHtml}
+      </div>
+    `;
   }
 
   document.getElementById("list").innerHTML = html;
 }
+
 
 
   window.insertEmoji = function(emoji, entryId) {
@@ -243,15 +237,16 @@ async function loadDiaryList() {
     }
   };
 
-  window.saveComment = async function(uid, dateId, entryId) {
-    const textarea = document.getElementById(`commentText-${entryId}`);
-    const text = textarea.value;
-    const now = new Date().toLocaleString();
-    const path = `diary/${uid}/entries/${dateId}/items/${entryId}/comments`;
-    await addDoc(collection(db, path), { text, timestamp: now });
-    textarea.value = "";
-    loadDiaryList();
-  };
+window.saveComment = async function(entryId) {
+  const textarea = document.getElementById(`commentText-${entryId}`);
+  const text = textarea.value;
+  const now = new Date().toLocaleString();
+  const path = `sharedDiaries/${entryId}/comments`;
+  await addDoc(collection(db, path), { text, timestamp: now });
+  textarea.value = "";
+  loadDiaryList();
+};
+
 
   window.previewImage = function() {
     const input = document.getElementById("imageInput");
