@@ -166,7 +166,7 @@
     const uid = currentUser.uid;
 
     const dateRef = doc(db, `diary/${uid}/entries/${dateId}`);
-    const entryRef = doc(collection(dateRef, 'items')); // 🔥 여기 핵심 수정
+    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}/items`));
 
     let imageUrl = "";
     if (imageFile) {
