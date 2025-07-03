@@ -74,7 +74,7 @@
   <div class="left">
     <div class="controls">
       <label id="user-label"></label>
-      <button onclick="saveDiary()">📂 일기 저장</button>
+      <button id="save-btn">📂 일기 저장</button>
     </div>
     <div id="editor" class="editor" contenteditable="true"></div>
     <input type="file" id="imageInput" accept="image/*" onchange="previewImage()" />
@@ -109,6 +109,7 @@
 
   let currentUser = null;
   const loginBtn = document.getElementById("login-btn");
+  const saveBtn = document.getElementById("save-btn");
   const diaryApp = document.getElementById("diary-app");
   const loginArea = document.getElementById("login-area");
   const userLabel = document.getElementById("user-label");
@@ -140,18 +141,18 @@
     diaryApp.style.display = "flex";
 
     const email = currentUser.email;
-  const name = email === "rheehanna27@gmail.com" ? "한나 👸🌸" :
-               email === "ezdaez28@gmail.com" ? "석민 🤴💙" : email;
-  userLabel.innerText = `👤 ${name}`;
+    const name = email === "rheehanna27@gmail.com" ? "한나 👸🌸" :
+                 email === "ezdaez28@gmail.com" ? "석민 🤴💙" : email;
+    userLabel.innerText = `${name}`;
+
+    // 배경색 설정
+    const bg = email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
+    editor.classList.remove("pink-bg", "blue-bg");
+    editor.classList.add(bg);
 
     insertDefaultEntryText();
     loadDiaryList();
-
-  // ✅ 배경색 적용도 그대로 유지
-  const bg = email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
-  editor.classList.remove("pink-bg", "blue-bg");
-  editor.classList.add(bg);
-}
+  }
 
   async function saveDiary() {
     const content = editor.innerHTML;
@@ -258,8 +259,9 @@
     editor.innerHTML = `<p><strong>${dateStr} · ${timeStr}</strong></p><p><br></p>`;
   }
 
-   window.saveDiary = saveDiary;
-  
+  // ✅ 버튼에 이벤트 연결
+  saveBtn.addEventListener("click", saveDiary);
+
 </script>
 </body>
 </html>
