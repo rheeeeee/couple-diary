@@ -1,265 +1,198 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>한나와 석민이의 공유일기장</title>
+  <meta charset="UTF-8">
+  <title>🌸 한나와 석민이의 공유일기장 🌸</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      font-family: sans-serif;
+      font-family: 'Arial', sans-serif;
       background-color: #fffaf3;
       margin: 0;
       padding: 0;
-    }
-    .container {
-      display: none;
-      flex-direction: row;
+      display: flex;
       height: 100vh;
     }
+    .container {
+      display: flex;
+      width: 100%;
+    }
     .left, .right {
-      flex: 1;
+      width: 50%;
       padding: 20px;
+      box-sizing: border-box;
       overflow-y: auto;
     }
     .left {
-      border-right: 1px solid #ccc;
+      border-right: 2px solid #eee;
     }
-    .editor {
-      padding: 20px;
-      border-radius: 15px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      min-height: 150px;
+    .diary-box {
+      padding: 15px;
+      border-radius: 12px;
+      margin-top: 20px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
     }
-    .controls button {
-      padding: 8px 12px;
-      margin: 5px;
-      border-radius: 8px;
-      font-size: 14px;
+    .diary-box.hanna {
+      background-color: #ffe4f0;
     }
-    #preview { max-width: 200px; margin: 10px auto; display: none; }
-    #commentText { width: 100%; border-radius: 8px; resize: none; height: 60px; }
-    .auth-box {
-      text-align: center;
-      margin: 50px auto;
+    .diary-box.seokmin {
+      background-color: #e0f0ff;
     }
-    .auth-box input {
-      display: block;
-      margin: 10px auto;
+    textarea {
+      width: 100%;
+      height: 150px;
       padding: 10px;
+      box-sizing: border-box;
       border-radius: 8px;
-      width: 200px;
-      font-size: 14px;
+      border: 1px solid #ccc;
+      resize: vertical;
     }
-    .pink-bg { background-color: #ffe6f0; }
-    .blue-bg { background-color: #e6f3ff; }
-
-    @media (max-width: 768px) {
-      .container { flex-direction: column; height: auto; }
-      .left, .right { border: none; height: auto; }
+    .header {
+      font-size: 20px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      background-color: #ffb6c1;
+      font-weight: bold;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+    .entry-list {
+      margin-top: 20px;
+    }
+    .entry-item {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
-<h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
-
-<!-- 로그인 화면 -->
-<div class="auth-box" id="login-area">
-  <input type="email" id="email" placeholder="이메일" />
-  <input type="password" id="password" placeholder="비밀번호" />
-  <button id="login-btn">🔐 로그인</button>
-</div>
-
-<!-- 일기장 화면 -->
-<div class="container" id="diary-app">
-  <div class="left">
-    <div class="controls">
-      <label id="user-label"></label>
-      <button onclick="saveDiary()">📂 일기 저장</button>
-    </div>
-    <div id="editor" class="editor" contenteditable="true"></div>
-    <input type="file" id="imageInput" accept="image/*" onchange="previewImage()" />
-    <img id="preview" src="">
-  </div>
-  <div class="right">
-    <h3>📚 저장된 일기 목록</h3>
-    <div id="list">불러오는 중...</div>
-    <div id="viewEntry"></div>
-  </div>
-</div>
-
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, getDocs, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-storage.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBUriLDY8uRXONDUDVRLtbu1VI2iRvc-Bk",
-    authDomain: "couple-diary-1f390.firebaseapp.com",
-    projectId: "couple-diary-1f390",
-    storageBucket: "couple-diary-1f390.appspot.com",
-    messagingSenderId: "274498048639",
-    appId: "1:274498048639:web:3706b378a8281c2a47654a"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-
-  let currentUser = null;
-  const loginBtn = document.getElementById("login-btn");
-  const diaryApp = document.getElementById("diary-app");
-  const loginArea = document.getElementById("login-area");
-  const userLabel = document.getElementById("user-label");
-  const editor = document.getElementById("editor");
-  const preview = document.getElementById("preview");
-  let imageFile = null;
-
-  loginBtn.onclick = async () => {
-    const email = document.getElementById("email").value;
-    const password = document.getElementById("password").value;
-    try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      currentUser = result.user;
-      showDiaryApp();
-    } catch (err) {
-      alert("❌ 로그인 실패: " + err.message);
-    }
-  };
-
-  onAuthStateChanged(auth, user => {
-    if (user) {
-      currentUser = user;
-      showDiaryApp();
-    }
-  });
-
-  function showDiaryApp() {
-    loginArea.style.display = "none";
-    diaryApp.style.display = "flex";
-
-    const email = currentUser.email;
-    const name = email === "rheehanna27@gmail.com" ? "한나 👸🌸" :
-                 email === "ezdaez28@gmail.com" ? "석민 🤴💙" : email;
-    userLabel.innerText = `👤 ${name}`;
-
-    const bg = email === "rheehanna27@gmail.com" ? "pink-bg" : "blue-bg";
-    editor.classList.remove("pink-bg", "blue-bg");
-    editor.classList.add(bg);
-
-    insertDefaultEntryText();
-    loadDiaryList();
-  }
-
-  async function saveDiary() {
-    const content = editor.innerHTML;
-    if (!content || content.trim() === "") {
-      alert("내용을 입력해주세요!");
-      return;
-    }
-
-    alert("⏳ 저장 중입니다...");
-    const now = new Date();
-    const dateId = now.toISOString().slice(0, 10);
-    const uid = currentUser.uid;
-    const entryId = Date.now().toString(); // 고유한 entry ID
-    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${crypto.randomUUID()}`);
-
-
-    let imageUrl = "";
-    if (imageFile) {
-      const storageRef = ref(storage, `${uid}/${dateId}_${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      imageUrl = await getDownloadURL(storageRef);
-    }
-
-    await setDoc(entryRef, {
-      content,
-      createdAt: now.toLocaleString(),
-      image: imageUrl
-    });
-
-    alert("🌼 저장되었습니다!");
-    editor.innerHTML = "";
-    imageFile = null;
-    preview.style.display = "none";
-    insertDefaultEntryText();
-    loadDiaryList();
-  }
-
-  async function loadDiaryList() {
-    const uid = currentUser.uid;
-    const rootRef = collection(db, `diary/${uid}/entries`);
-    const rootSnap = await getDocs(rootRef);
-
-    let html = "<ul>";
-    for (const folder of rootSnap.docs) {
-      const dateId = folder.id;
-      const entriesRef = collection(db, `diary/${uid}/entries/${dateId}/items`);
-      const entriesSnap = await getDocs(entriesRef);
-      entriesSnap.forEach(doc => {
-        html += `<li onclick="viewDiary('${uid}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
-      });
-    }
-    html += "</ul>";
-    document.getElementById("list").innerHTML = html;
-  }
-
-  window.viewDiary = async function(uid, dateId, entryId) {
-    const docRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
-    const snap = await getDoc(docRef);
-    const data = snap.data();
-
-    let html = `
-      <h3>📖 일기 (${dateId})</h3>
-      <div style="padding:10px; border-radius:10px; background:#f9f9f9;">
-        ${data.content}
-        ${data.image ? `<br><img src="${data.image}" style="max-width:100%; margin-top:10px;">` : ""}
+  <div class="container">
+    <div class="left">
+      <div class="header">👩 한나 <button onclick="saveDiary()">📂 일기 저장</button></div>
+      <div id="editor" class="diary-box">
+        <div id="timestamp"></div>
+        <textarea id="diaryText" placeholder="오늘의 이야기를 적어보세요..."></textarea>
+        <input type="file" id="fileInput" />
       </div>
-      <textarea id="commentText" placeholder="댓글 작성" style="margin-top:10px;"></textarea>
-      <button onclick="saveComment('${uid}', '${dateId}', '${entryId}')">댓글 저장</button>
-    `;
+    </div>
+    <div class="right">
+      <div class="header">📚 저장된 일기 목록</div>
+      <div id="entryList" class="entry-list">불러오는 중...</div>
+    </div>
+  </div>
 
-    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`);
-    const comments = await getDocs(commentRef);
-    html += `<div><h4>📆 댓글</h4><ul>`;
-    comments.forEach(c => {
-      html += `<li>${c.data().text} (${c.data().timestamp})</li>`;
+  <!-- Firebase SDK -->
+  <script type="module">
+    // Firebase 초기 설정
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, collection, doc, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+    const firebaseConfig = {
+      apiKey: "한나의 firebase 키",
+      authDomain: "한나의 firebase 도메인",
+      projectId: "한나의 firebase 프로젝트 ID",
+      storageBucket: "한나의 storage bucket",
+      messagingSenderId: "보내는사람 ID",
+      appId: "앱 ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    let currentUser;
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUser = user;
+        const email = user.email;
+        const editorBox = document.getElementById('editor');
+        const header = document.querySelector('.left .header');
+
+        if (email === 'rheehanna27@gmail.com') {
+          editorBox.classList.add('hanna');
+          header.innerHTML = '👧 한나 <button onclick="saveDiary()">📂 일기 저장</button>';
+        } else if (email === 'ezdaez28@gmail.com') {
+          editorBox.classList.add('seokmin');
+          header.innerHTML = '👦 석민 <button onclick="saveDiary()">📂 일기 저장</button>';
+        }
+
+        loadDiaryList();
+        updateTimestamp();
+      } else {
+        alert("로그인 후 이용해주세요!");
+        window.location.href = "login.html"; // 로그인 페이지
+      }
     });
-    html += `</ul></div>`;
-    document.getElementById("viewEntry").innerHTML = html;
-  };
 
-  window.saveComment = async function(uid, dateId, entryId) {
-    const textarea = document.getElementById("commentText");
-    const text = textarea.value;
-    const now = new Date().toLocaleString();
-    const commentRef = collection(db, `diary/${uid}/entries/${dateId}/items/${entryId}/comments`);
-    await addDoc(commentRef, { text, timestamp: now });
-    await viewDiary(uid, dateId, entryId);
-    textarea.value = "";
-  };
-
-  window.previewImage = function() {
-    const input = document.getElementById("imageInput");
-    imageFile = input.files[0];
-    if (imageFile) {
-      preview.src = URL.createObjectURL(imageFile);
-      preview.style.display = "block";
-    } else {
-      preview.style.display = "none";
+    function updateTimestamp() {
+      const now = new Date();
+      const date = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
+      const time = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById("timestamp").innerText = `${date} · ${time}`;
     }
-  };
 
-  async function insertDefaultEntryText() {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-    const timeStr = now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    editor.innerHTML = `<p><strong>${dateStr} · ${timeStr}</strong></p><p><br></p>`;
-  }
+    async function saveDiary() {
+      const text = document.getElementById("diaryText").value;
+      const file = document.getElementById("fileInput").files[0];
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0];
 
-  window.saveDiary = saveDiary;
-</script>
+      const diaryRef = collection(db, "diary", currentUser.uid, "entries", dateStr, "items");
+
+      let fileURL = "";
+
+      if (file) {
+        const storageRef = ref(storage, `uploads/${currentUser.uid}/${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        fileURL = await getDownloadURL(snapshot.ref);
+      }
+
+      await addDoc(diaryRef, {
+        text,
+        fileURL,
+        createdAt: serverTimestamp()
+      });
+
+      alert("일기가 저장되었습니다!");
+      document.getElementById("diaryText").value = "";
+      document.getElementById("fileInput").value = "";
+      loadDiaryList();
+    }
+
+    async function loadDiaryList() {
+      const listContainer = document.getElementById("entryList");
+      listContainer.innerHTML = "불러오는 중...";
+
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0];
+      const diaryRef = collection(db, "diary", currentUser.uid, "entries", dateStr, "items");
+      const snapshot = await getDocs(diaryRef);
+
+      let html = "";
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        html += `<div class="entry-item">
+          ${data.text ? `<p>${data.text}</p>` : ""}
+          ${data.fileURL ? `<img src="${data.fileURL}" width="100%">` : ""}
+        </div>`;
+      });
+
+      listContainer.innerHTML = html || "오늘의 일기가 없습니다.";
+    }
+  </script>
 </body>
 </html>
