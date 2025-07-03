@@ -206,9 +206,10 @@ async function loadDiaryList() {
       const c = comment.data();
       commentHtml += `<div style="font-size:13px; margin-top:4px;">🗨️ ${c.text} <span style="font-size:11px; color:gray;">(${c.timestamp})</span></div>`;
     });
+const bgColor = data.username === "hanna" ? "#ffe6f0" : "#e6f3ff";
 
     html += `
-      <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: #f9f9f9;">
+      <div style="margin-bottom: 25px; padding: 10px; border-radius: 10px; background-color: ${bgColor};">
         <div class="entry-date">${data.createdAt} · ${data.author}</div>
         <div class="entry-content">${data.content}</div>
         ${data.image ? `<img src="${data.image}" style="max-width: 100%; margin-top: 10px;">` : ""}
