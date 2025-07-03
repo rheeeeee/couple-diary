@@ -12,7 +12,7 @@
       padding: 0;
     }
     .container {
-      display: none; /* 로그인 전엔 숨김 */
+      display: none;
       flex-direction: row;
       height: 100vh;
     }
@@ -30,19 +30,25 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
       min-height: 150px;
     }
-    .controls select, .controls button {
+    .controls button {
       padding: 8px 12px;
       margin: 5px;
       border-radius: 8px;
       font-size: 14px;
     }
     #preview { max-width: 200px; margin: 10px auto; display: none; }
-    .pink-bg { background-color: #ffe6f0; }
-    .blue-bg { background-color: #e6f3ff; }
     #commentText { width: 100%; border-radius: 8px; resize: none; height: 60px; }
-    .auth-buttons {
+    .auth-box {
       text-align: center;
-      padding: 50px;
+      margin: 50px auto;
+    }
+    .auth-box input {
+      display: block;
+      margin: 10px auto;
+      padding: 10px;
+      border-radius: 8px;
+      width: 200px;
+      font-size: 14px;
     }
     @media (max-width: 768px) {
       .container { flex-direction: column; height: auto; }
@@ -53,12 +59,14 @@
 <body>
 <h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
 
-<!-- 로그인 버튼 -->
-<div class="auth-buttons" id="login-area">
-  <button id="login-btn">🔐 Google 로그인</button>
+<!-- 로그인 화면 -->
+<div class="auth-box" id="login-area">
+  <input type="email" id="email" placeholder="이메일" />
+  <input type="password" id="password" placeholder="비밀번호" />
+  <button id="login-btn">🔐 로그인</button>
 </div>
 
-<!-- 일기장 영역 -->
+<!-- 일기장 화면 -->
 <div class="container" id="diary-app">
   <div class="left">
     <div class="controls">
@@ -78,7 +86,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, getDocs, getDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
   import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-storage.js";
 
@@ -95,24 +103,25 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
   const storage = getStorage(app);
-  const provider = new GoogleAuthProvider();
 
+  let currentUser = null;
   const loginBtn = document.getElementById("login-btn");
-  const loginArea = document.getElementById("login-area");
   const diaryApp = document.getElementById("diary-app");
+  const loginArea = document.getElementById("login-area");
   const userLabel = document.getElementById("user-label");
   const editor = document.getElementById("editor");
   const preview = document.getElementById("preview");
   let imageFile = null;
-  let currentUser = null;
 
   loginBtn.onclick = async () => {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
     try {
-      const result = await signInWithPopup(auth, provider);
+      const result = await signInWithEmailAndPassword(auth, email, password);
       currentUser = result.user;
       showDiaryApp();
-    } catch (error) {
-      alert("로그인 실패!");
+    } catch (err) {
+      alert("❌ 로그인 실패: " + err.message);
     }
   };
 
@@ -126,7 +135,7 @@
   function showDiaryApp() {
     loginArea.style.display = "none";
     diaryApp.style.display = "flex";
-    userLabel.innerText = `👤 ${currentUser.displayName}`;
+    userLabel.innerText = `👤 ${currentUser.email}`;
     insertDefaultEntryText();
     loadDiaryList();
   }
@@ -136,7 +145,7 @@
     const now = new Date();
     const dateId = now.toISOString().slice(0, 10);
     const uid = currentUser.uid;
-    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}`)); // random entry
+    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}`));
 
     let imageUrl = "";
     if (imageFile) {
