@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>한나와 석민이의 공유일기장</title>
   <style>
     body {
@@ -12,6 +13,7 @@
     }
     .container {
       display: flex;
+      flex-direction: row;
       height: 100vh;
     }
     .left, .right {
@@ -39,10 +41,20 @@
     .blue-bg { background-color: #e6f3ff; }
     #commentBox { margin-top: 20px; }
     #commentText { width: 100%; border-radius: 8px; resize: none; height: 60px; }
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+        height: auto;
+      }
+      .left, .right {
+        border: none;
+        height: auto;
+      }
+    }
   </style>
 </head>
 <body>
-<h2 style="text-align:center; padding:10px;">🌸 한나와 석민이의 공유일기장 🌸</h2>
+<h2 style="text-align:center; padding:10px;"> 한나❤️석민 공유일기 </h2>
 <div class="container">
   <div class="left">
     <div class="controls">
@@ -54,8 +66,7 @@
       <button onclick="saveDiary()">📂 일기 저장</button>
     </div>
     <div id="editor" class="editor" contenteditable="true"></div>
-    <input type="file" id="imageInput" accept="image/*" onchange="previewImage()">
-    <br>
+    <input type="file" id="imageInput" accept="image/*" onchange="previewImage()" />
     <img id="preview" src="">
   </div>
   <div class="right">
@@ -93,7 +104,9 @@ async function saveDiary() {
   const content = editor.innerHTML;
   const now = new Date();
   const dateId = now.toISOString().slice(0, 10);
-  const entryRef = doc(db, `diary/${writer}/entries/${dateId}`);
+
+  const entriesRef = collection(db, `diary/${writer}/entries/${dateId}`);
+  const newEntryRef = doc(entriesRef); // 고유 ID 생성
 
   let imageUrl = "";
   if (imageFile) {
@@ -102,9 +115,9 @@ async function saveDiary() {
     imageUrl = await getDownloadURL(storageRef);
   }
 
-  await setDoc(entryRef, {
+  await setDoc(newEntryRef, {
     content,
-    updatedAt: now.toLocaleString(),
+    createdAt: now.toLocaleString(),
     image: imageUrl
   });
 
@@ -118,19 +131,24 @@ async function saveDiary() {
 
 async function loadDiaryList() {
   const writer = writerSelect.value;
-  const entriesRef = collection(db, `diary/${writer}/entries`);
-  const snap = await getDocs(entriesRef);
+  const rootRef = collection(db, `diary/${writer}/entries`);
+  const rootSnap = await getDocs(rootRef);
 
   let html = "<ul>";
-  snap.forEach(doc => {
-    html += `<li onclick="viewDiary('${writer}', '${doc.id}')">${doc.id}</li>`;
-  });
+  for (const folder of rootSnap.docs) {
+    const dateId = folder.id;
+    const entriesRef = collection(db, `diary/${writer}/entries/${dateId}`);
+    const entriesSnap = await getDocs(entriesRef);
+    entriesSnap.forEach(doc => {
+      html += `<li onclick="viewDiary('${writer}', '${dateId}', '${doc.id}')">${dateId} - ${doc.id}</li>`;
+    });
+  }
   html += "</ul>";
   document.getElementById("list").innerHTML = html;
 }
 
-window.viewDiary = async function(writer, dateId) {
-  const docRef = doc(db, `diary/${writer}/entries/${dateId}`);
+window.viewDiary = async function(writer, dateId, entryId) {
+  const docRef = doc(db, `diary/${writer}/entries/${dateId}/${entryId}`);
   const snap = await getDoc(docRef);
   const data = snap.data();
   const bgColor = writer === "hanna" ? "pink-bg" : "blue-bg";
@@ -142,16 +160,17 @@ window.viewDiary = async function(writer, dateId) {
       ${data.image ? `<br><img src="${data.image}" style="max-width:100%; margin-top:10px;">` : ""}
     </div>
     <div style="margin: 10px 0; display: flex; align-items: center; gap: 10px;">
-  <div id="emojiBox">
-    <button onclick="addEmoji('❤️')">❤️</button>
-    <button onclick="addEmoji('😊')">😊</button>
-    <button onclick="addEmoji('😢')">😢</button>
-  </div>
-  <button onclick="saveComment('${writer}', '${dateId}')">댓글 저장</button>
-</div>
+      <div id="emojiBox">
+        <button onclick="addEmoji('❤️')">❤️</button>
+        <button onclick="addEmoji('😊')">😊</button>
+        <button onclick="addEmoji('😢')">😢</button>
+      </div>
+      <button onclick="saveComment('${writer}', '${dateId}', '${entryId}')">댓글 저장</button>
+    </div>
+    <textarea id="commentText" placeholder="댓글을 작성하세요" style="width:100%; margin-top:10px;"></textarea>
   `;
 
-  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/comments`);
+  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/${entryId}/comments`);
   const comments = await getDocs(commentRef);
   html += `<div><h4>📆 댓글 목록</h4><ul>`;
   comments.forEach(c => {
@@ -161,13 +180,13 @@ window.viewDiary = async function(writer, dateId) {
   document.getElementById("viewEntry").innerHTML = html;
 }
 
-window.saveComment = async function(writer, dateId) {
+window.saveComment = async function(writer, dateId, entryId) {
   const textarea = document.getElementById("commentText");
   const text = textarea.value;
   const now = new Date().toLocaleString();
-  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/comments`);
+  const commentRef = collection(db, `diary/${writer}/entries/${dateId}/${entryId}/comments`);
   await addDoc(commentRef, { text, timestamp: now });
-  await viewDiary(writer, dateId);
+  await viewDiary(writer, dateId, entryId);
   textarea.value = "";
 }
 
