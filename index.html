@@ -87,7 +87,6 @@
   </div>
 </div>
 
-<!-- Firebase 로직 -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
@@ -164,9 +163,8 @@
     const now = new Date();
     const dateId = now.toISOString().slice(0, 10);
     const uid = currentUser.uid;
-
-    const dateRef = doc(db, `diary/${uid}/entries/${dateId}`);
-    const entryRef = doc(collection(db, `diary/${uid}/entries/${dateId}/items`));
+    const entryId = Date.now().toString(); // 고유한 entry ID
+    const entryRef = doc(db, `diary/${uid}/entries/${dateId}/items/${entryId}`);
 
     let imageUrl = "";
     if (imageFile) {
